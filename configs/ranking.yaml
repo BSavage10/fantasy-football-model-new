@@ -1,0 +1,9 @@
+ranking_objective: median   # median | upside | risk_adjusted
+replacement_level:
+  QB: 20     # 10 teams x 2 starters
+  RB: 20
+  WR: 30
+  TE: 10
+  K: 10
+  DEF: 10
+vor_method: simple

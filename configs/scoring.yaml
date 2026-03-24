@@ -1,0 +1,39 @@
+offense:
+  passing_yards_per_point: 25.0    # 0.04 per yard
+  passing_td: 4.0
+  interception: -2.0               # Custom: Yahoo default is -1
+  rushing_yards_per_point: 10.0    # 0.10 per yard
+  rushing_td: 6.0
+  reception: 0.5                   # Half-PPR
+  receiving_yards_per_point: 10.0
+  receiving_td: 6.0
+  return_td: 6.0
+  two_pt_conversion: 2.0
+  fumble_lost: -2.0
+  offensive_fumble_return_td: 6.0
+
+kicker:
+  fg_0_19: 3.0
+  fg_20_29: 3.0
+  fg_30_39: 3.0
+  fg_40_49: 4.0
+  fg_50_plus: 5.0
+  pat_made: 1.0
+
+dst:
+  sack: 1.0
+  interception: 2.0
+  fumble_recovery: 2.0
+  touchdown: 6.0
+  safety: 2.0
+  block_kick: 2.0
+  return_td: 6.0
+  extra_point_return: 2.0
+  points_allowed_brackets:
+    - [0, 0, 10.0]
+    - [1, 6, 7.0]
+    - [7, 13, 4.0]
+    - [14, 20, 1.0]
+    - [21, 27, 0.0]
+    - [28, 34, -1.0]
+    - [35, 999, -4.0]

@@ -1,0 +1,33 @@
+league_id: 1221676
+league_name: "STOP!"
+platform: yahoo
+teams: 10
+divisions: 2
+scoring_type: head_to_head
+fractional_points: true
+negative_points: true
+roster_slots:
+  QB: 2
+  WR: 2
+  RB: 2
+  TE: 1
+  FLEX: 1      # W/R/T
+  K: 1
+  DEF: 1
+  BN: 6
+  IR: 1
+flex_eligible: [RB, WR, TE]
+draft:
+  type: live_standard
+  date: "2026-09-01"    # Mon Sep 1 -- as_of_date should be before this
+  pick_time_seconds: 60
+playoffs:
+  teams: 6
+  weeks: [15, 16, 17]
+  tie_breaker: higher_seed_wins
+  reseeding: true
+  seeding: overall_standings
+waiver:
+  type: fab_reverse_standings
+  time_days: 2
+  weekly_deadline: game_time_tuesday

@@ -1,0 +1,43 @@
+recency_weights:
+  1: 0.50    # Most recent season
+  2: 0.30
+  3: 0.20
+
+regression_samples:     # Pseudo-observations for Bayes shrinkage
+  pass_td_rate: 1500    # Pass attempts
+  int_rate: 800
+  yards_per_carry: 600
+  catch_rate: 150       # Targets
+  receiving_td_rate: 300
+  yards_per_attempt: 600
+  dst_td_rate: 500      # Defensive plays
+
+games_active:
+  default_max: 17
+  shrinkage: 0.20       # Blend 80% player history, 20% position average
+  position_prior:
+    QB: 16.0
+    RB: 14.5
+    WR: 15.5
+    TE: 15.0
+    K: 16.5
+    DEF: 17.0
+  low_sample_threshold: 8   # Games; below this, flag as low_sample
+
+overlay:
+  enabled: true
+  max_effect_per_factor: 0.15
+  max_total_effect: 0.25
+  low_confidence_threshold: 0.30
+
+uncertainty:
+  method: bootstrap_residual
+  n_samples: 5000
+  percentiles: [25, 50, 75]
+
+team_changer:
+  player_history_weight: 0.70
+  team_prior_weight: 0.30
+
+rookie:
+  draft_round_buckets: ["1.01-1.12", "1.13-1.32", "2", "3", "4-5", "6-7", "UDFA"]

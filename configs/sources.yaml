@@ -1,0 +1,31 @@
+seasons:
+  min: 2020
+  max: 2025
+  target: 2026
+
+required:
+  - pbp
+  - weekly_stats
+  - seasonal_stats
+  - rosters
+  - players
+  - schedules
+  - draft_picks
+
+optional:
+  - depth_charts
+  - snap_counts
+  - combine
+  - contracts
+  - nextgen_passing
+  - nextgen_rushing
+  - nextgen_receiving
+  - pfr_passing
+  - pfr_rushing
+  - pfr_receiving
+  - ff_opportunity
+  - ff_rankings
+
+fallback_behavior:
+  optional_missing: warn_and_continue
+  required_missing: fail

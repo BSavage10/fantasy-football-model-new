@@ -1,0 +1,16 @@
+data/raw/*
+data/silver/*
+data/gold/*
+outputs/*
+!**/.gitkeep
+
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.DS_Store
+uv.lock

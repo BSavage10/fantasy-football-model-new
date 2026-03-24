@@ -1,0 +1,24 @@
+[project]
+name = "ffmodel"
+version = "0.1.0"
+description = "2026 preseason fantasy football projection system"
+requires-python = ">=3.11"
+dependencies = [
+    "nfl_data_py",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+ffmodel = "ffmodel.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+]
