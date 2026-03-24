@@ -4,6 +4,25 @@ All notable changes to the ffmodel projection system, organized by implementatio
 
 ---
 
+## Phase 3 — Feature Engineering (2026-03-24)
+
+### Added
+- **Feature layer** — five gold-table modules that read silver Parquet and write model-ready features to `data/gold/{as_of_date}/`:
+  - `team_context.py` — One row per team for target season. Recency-weighted team environment projections (plays, dropbacks, rushes, targets, neutral pass rate, PROE, red zone drives/game, points/drive, EPA/play). Teams with <3 seasons of history shrink toward league averages.
+  - `player_role.py` — One row per player for target season. Share-based role features (rush_share, target_share, starter_share_of_dropbacks, qb_rush_attempts_per_game). Detects team changers (blends historical shares with positional priors at configurable 70/30 weight) and rookies (draft-capital bucketed positional priors). Normalizes within-team shares to sum ≤1.0.
+  - `efficiency.py` — One row per player for target season. Regressed efficiency rates via empirical Bayes shrinkage (`regress_rate()` function). Covers: yards_per_attempt, comp_rate, pass_td_rate, int_rate, yards_per_carry, yards_per_target, catch_rate, receiving_td_rate. League priors computed from all qualifying players in the training window.
+  - `availability.py` — One row per player for target season. Games-active projection from weighted historical games-played, position-based shrinkage (configurable), per-position age discounts (RB threshold at 28, QB at 37, etc.), capped at 17 games.
+  - `manual_factors.py` — Loads `manual/manual_factors.csv`, validates schema (rejects out-of-range scores, missing owner/rationale), expires stale entries past `expires_at`, writes validated factors to Parquet.
+- **Manual factors template** (`manual/manual_factors.csv`) with header row and example entries.
+- **CLI dispatch** for `features` subcommand — reads silver tables, calls all feature builders, writes gold tables.
+- **36 feature tests** (`tests/test_features.py`): share sum constraints, leakage prevention, regress_rate known-value verification, rookie non-null features, team changer detection and blending, availability caps and age discounts, manual factor validation and expiration.
+
+### Changed
+- `ffmodel/cli.py` — Added `_cmd_features` handler and wired it into dispatch table.
+- `CLAUDE.md` — Updated architecture, CLI, phase status, and test counts.
+
+---
+
 ## Phase 2 — Data Ingestion & Canonical Transform (2026-03-24)
 
 ### Added

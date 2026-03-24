@@ -1,0 +1,4 @@
+entity_id,entity_type,factor_name,score_raw,confidence,owner,rationale,expires_at
+P001,player,coaching_quality,0.70,0.80,analyst,Stable offensive system with proven coordinator,2026-09-01
+P002,player,role_clarity,0.85,0.90,analyst,Clear lead back role with no competition,2026-09-01
+KC,team,scheme_fit,0.75,0.70,analyst,Andy Reid offense consistently supports fantasy production,2026-09-01

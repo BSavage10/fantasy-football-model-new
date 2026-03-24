@@ -37,6 +37,58 @@ def _cmd_ingest(args: argparse.Namespace) -> None:
     print(f"[ffmodel] ingest complete → {out_dir}")
 
 
+def _cmd_features(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from ffmodel.features.availability import write_availability_features
+    from ffmodel.features.efficiency import write_player_efficiency_features
+    from ffmodel.features.manual_factors import write_manual_factor_features
+    from ffmodel.features.player_role import write_player_role_features
+    from ffmodel.features.team_context import write_team_context_features
+
+    config = load_project_config(args.config_dir)
+    data_dir = Path(args.data_dir)
+    silver_dir = data_dir / "silver" / args.as_of_date
+    gold_dir = data_dir / "gold" / args.as_of_date
+
+    if not silver_dir.exists():
+        print(f"[ffmodel] Silver data not found at {silver_dir} — run transform first", file=sys.stderr)
+        sys.exit(1)
+
+    target_season = config.sources.seasons.target
+    recency_weights = config.model.recency_weights
+
+    write_team_context_features(silver_dir, gold_dir, target_season, recency_weights)
+
+    team_changer_cfg = {
+        "player_history_weight": config.model.team_changer.player_history_weight,
+        "team_prior_weight": config.model.team_changer.team_prior_weight,
+    }
+    write_player_role_features(
+        silver_dir, gold_dir, target_season, recency_weights, team_changer_cfg,
+    )
+
+    write_player_efficiency_features(
+        silver_dir, gold_dir, target_season, recency_weights,
+        config.model.regression_samples,
+    )
+
+    games_active_cfg = {
+        "default_max": config.model.games_active.default_max,
+        "shrinkage": config.model.games_active.shrinkage,
+        "position_prior": config.model.games_active.position_prior,
+        "low_sample_threshold": config.model.games_active.low_sample_threshold,
+    }
+    write_availability_features(
+        silver_dir, gold_dir, target_season, recency_weights, games_active_cfg,
+    )
+
+    manual_dir = Path("manual")
+    write_manual_factor_features(manual_dir, gold_dir, args.as_of_date)
+
+    print(f"[ffmodel] features complete → {gold_dir}")
+
+
 def _cmd_transform(args: argparse.Namespace) -> None:
     from pathlib import Path
 
@@ -142,6 +194,7 @@ def main(argv: list[str] | None = None) -> None:
     dispatch = {
         "ingest": _cmd_ingest,
         "transform": _cmd_transform,
+        "features": _cmd_features,
     }
 
     handler = dispatch.get(args.command)

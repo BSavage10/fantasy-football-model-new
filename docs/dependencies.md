@@ -10,7 +10,7 @@ How the system's components connect. Updated as the project evolves.
 nfl_data_py ──→ snapshot.py (data extraction)
 pandas ────────→ all transform & feature modules
 pyarrow ───────→ Parquet I/O throughout
-numpy ─────────→ team_week.py, future models
+numpy ─────────→ team_week.py, team_context.py, player_role.py, efficiency.py, future models
 scipy ─────────→ future models (regression, bootstrap)
 pyyaml ────────→ config.py (config loading)
 ```
@@ -29,7 +29,11 @@ CLI (cli.py)
   │                player_week.py ──→ data/silver/{as_of_date}/player_week_fact.parquet
   │                team_week.py ────→ data/silver/{as_of_date}/team_week_fact.parquet
   │
-  ├─ features (Phase 3) ──→ data/gold/{as_of_date}/*.parquet
+  ├─ features ──→ team_context.py ────→ data/gold/{as_of_date}/team_context_features.parquet
+  │               player_role.py ────→ data/gold/{as_of_date}/player_role_features.parquet
+  │               efficiency.py ─────→ data/gold/{as_of_date}/player_efficiency_features.parquet
+  │               availability.py ───→ data/gold/{as_of_date}/availability_features.parquet
+  │               manual_factors.py ─→ data/gold/{as_of_date}/manual_factor_features.parquet
   ├─ project  (Phase 5) ──→ outputs/{run_id}/projections/
   ├─ rank     (Phase 6) ──→ outputs/{run_id}/rankings/
   └─ backtest (Phase 7) ──→ outputs/backtest/
@@ -80,19 +84,42 @@ Steps 1–2 could run in parallel; steps 3–5 could run in parallel (they only 
 | `player_week_fact` | `weekly_stats.parquet` | — |
 | `team_week_fact` | `pbp.parquet` | `schedules.parquet` (for points scored/allowed) |
 
-### Future Dependencies (Phases 3–7)
+### Feature Layer
+
+```
+Silver tables ──→ Feature modules
+                    │
+                    ├─ team_context.py:  team_week_fact
+                    ├─ player_role.py:   player_week_fact + team_week_fact + player_dim
+                    ├─ efficiency.py:    player_week_fact
+                    ├─ availability.py:  player_week_fact + player_dim
+                    └─ manual_factors.py: manual/manual_factors.csv
+```
+
+Feature execution order in `cli.py`:
+1. `team_context` — reads team_week_fact
+2. `player_role` — reads player_week_fact + team_week_fact + player_dim
+3. `efficiency` — reads player_week_fact
+4. `availability` — reads player_week_fact + player_dim
+5. `manual_factors` — reads manual/manual_factors.csv
+
+Steps 1–5 are independent (each reads only from silver); they could run in parallel.
+
+### Silver → Gold Data Dependencies
+
+| Gold Table | Silver Sources | Config Sources |
+|-----------|---------------|---------------|
+| `team_context_features` | `team_week_fact` | `ModelConfig.recency_weights` |
+| `player_role_features` | `player_week_fact`, `team_week_fact`, `player_dim` | `ModelConfig.recency_weights`, `ModelConfig.team_changer` |
+| `player_efficiency_features` | `player_week_fact` | `ModelConfig.recency_weights`, `ModelConfig.regression_samples` |
+| `availability_features` | `player_week_fact`, `player_dim` | `ModelConfig.recency_weights`, `ModelConfig.games_active` |
+| `manual_factor_features` | `manual/manual_factors.csv` | — |
+
+### Future Dependencies (Phases 4–7)
 
 These are planned but not yet built:
 
 ```
-Silver tables ──→ Feature modules (Phase 3)
-                    │
-                    ├─ team_context.py:  team_week_fact
-                    ├─ player_role.py:   player_week_fact + team_week_fact
-                    ├─ efficiency.py:    player_week_fact
-                    ├─ availability.py:  player_week_fact + player_dim
-                    └─ manual_factors.py: manual/manual_factors.csv
-
 Gold features ──→ Position models (Phase 5)
                     │
                     ├─ Each model reads: team_context + player_role + efficiency + availability
@@ -111,7 +138,7 @@ Projections ──→ Scoring engine (Phase 4)
 |--------|------------|
 | `ScoringConfig` | `scoring/engine.py` (Phase 4), `models/uncertainty.py` (Phase 5) |
 | `LeagueConfig` | `ranking/ranker.py` (Phase 6) |
-| `ModelConfig` | `features/*.py` (Phase 3), `models/*.py` (Phase 5), `overlay/applicator.py` (Phase 6) |
+| `ModelConfig` | `features/*.py`, `models/*.py` (Phase 5), `overlay/applicator.py` (Phase 6) |
 | `RankingConfig` | `ranking/ranker.py` (Phase 6) |
 | `SourcesConfig` | `ingest/snapshot.py` |
 
@@ -121,3 +148,4 @@ Projections ──→ Scoring engine (Phase 4)
 |-----------|---------------|-------------------|
 | `test_config.py` | `conftest.py` (`configs_dir`) | `config.py` |
 | `test_transform.py` | Own `raw_dir` fixture (synthetic Parquet) | All 5 transform modules |
+| `test_features.py` | Own fixtures (synthetic DataFrames) | All 5 feature modules + `regress_rate()` |

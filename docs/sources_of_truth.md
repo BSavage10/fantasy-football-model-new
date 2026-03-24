@@ -22,7 +22,7 @@ All config values are loaded into frozen dataclasses via `ffmodel/config.py`. Th
 |-------|-------------|---------------------|--------|
 | Bronze (raw) | `data/raw/{as_of_date}/` | `ffmodel/ingest/snapshot.py` | Parquet + `_manifest.json` |
 | Silver (canonical) | `data/silver/{as_of_date}/` | `ffmodel/transform/*.py` | Parquet |
-| Gold (features) | `data/gold/{as_of_date}/` | `ffmodel/features/*.py` (Phase 3) | Parquet |
+| Gold (features) | `data/gold/{as_of_date}/` | `ffmodel/features/*.py` | Parquet |
 | Outputs | `outputs/{run_id}/` | `ffmodel/export/writer.py` (Phase 6) | Parquet + CSV |
 
 ## Silver Table Schemas
@@ -51,16 +51,40 @@ Current mappings: OAK→LV, SD→LAC, STL→LA, WSH→WAS.
 | Player IDs | nflverse `import_players()` | Bundled with nfl_data_py | `gsis_id` is the canonical key |
 | PFR cross-reference | nflverse `import_ids()` | Bundled with nfl_data_py | Used for `pfr_id` bridging in `player_dim` |
 
+## Gold Table Schemas
+
+Canonical column definitions for each gold table are defined as `COLUMNS` lists at the top of their respective modules:
+
+| Table | Module | Grain |
+|-------|--------|-------|
+| `team_context_features.parquet` | `ffmodel/features/team_context.py` | 1 row per team (target season) |
+| `player_role_features.parquet` | `ffmodel/features/player_role.py` | 1 row per player (target season) |
+| `player_efficiency_features.parquet` | `ffmodel/features/efficiency.py` | 1 row per player (target season) |
+| `availability_features.parquet` | `ffmodel/features/availability.py` | 1 row per player (target season) |
+| `manual_factor_features.parquet` | `ffmodel/features/manual_factors.py` | 1 row per entity-factor |
+
+## Key Algorithms
+
+| Function | Module | Purpose |
+|----------|--------|---------|
+| `regress_rate()` | `ffmodel/features/efficiency.py` | Empirical Bayes shrinkage: `(observed × N + prior × k) / (N + k)` |
+| `_normalize_shares_within_team()` | `ffmodel/features/player_role.py` | Proportionally scale shares to sum ≤1.0 per team |
+
+## Manual Factors
+
+Manual overlay inputs are stored in `manual/manual_factors.csv`. Required columns: `entity_id`, `entity_type`, `factor_name`, `score_raw` (0–1), `confidence`, `owner`, `rationale`. Optional: `expires_at`. Validation happens at load time in `ffmodel/features/manual_factors.py`.
+
 ## Tests
 
 | Test File | Covers | Count |
 |-----------|--------|-------|
 | `tests/test_config.py` | Config loading, validation, frozen enforcement, hash determinism | 20 |
 | `tests/test_transform.py` | All 5 silver table transforms — uniqueness, schemas, types, normalization | 30 |
+| `tests/test_features.py` | All 5 feature modules — share sums, leakage prevention, regress_rate math, rookies, team changers, availability, manual factor validation | 36 |
 
 ## Design Document
 
-The implementation plan lives at `~/.claude/plans/merry-doodling-token.md`. It defines the phase breakdown, data model contracts, algorithm specifications, and exit criteria.
+The implementation plan lives at `docs/implementation-plan.md`. It defines the phase breakdown, data model contracts, algorithm specifications, and exit criteria.
 
 ## Requirements
 

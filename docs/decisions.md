@@ -4,6 +4,46 @@ Records why specific implementation choices were made. Organized by phase.
 
 ---
 
+## Phase 3 — Feature Engineering
+
+### D-3.1: Recency-weighted averages for team context
+
+**Decision:** Aggregate team_week_fact to per-game averages per team-season, then apply configurable recency weights (default 50/30/20) across prior seasons. Teams with fewer than 3 seasons of history shrink toward league averages.
+
+**Why:** Team environments shift year to year (coaching changes, roster turnover), so recent seasons should count more. But a single-season sample is noisy — blending with prior years smooths out fluky seasons. The shrinkage toward league average for short-history teams (e.g., expansion or relocation edge cases) prevents extreme projections from a single outlier season.
+
+### D-3.2: Share normalization within teams
+
+**Decision:** After computing all players' recency-weighted rush_share and target_share, proportionally scale shares within each team so they sum to ≤1.0.
+
+**Why:** When a team changer joins a new team, their historical shares (computed against their old team's volume) stack on top of existing players' shares, easily pushing totals above 1.0. Without normalization, the exit criterion (shares ≤1.05 per team) would fail. Proportional scaling preserves relative share ordering while enforcing the budget constraint. This is a projection-time concern — historical per-season shares are computed honestly against actual team totals.
+
+### D-3.3: Team changer blending with positional priors
+
+**Decision:** For team changers, blend recency-weighted historical shares with positional priors using configurable weights (default 70% player history, 30% positional prior).
+
+**Why:** A player's historical shares reflect their talent/role, but the new team's scheme and competition matter too. Pure historical shares ignore the new context; pure positional priors ignore the player's track record. The 70/30 blend is a pragmatic starting point — the model config makes it tunable. The positional priors are conservative defaults (e.g., RB rush_share 0.15) that act as a soft anchor toward the team's typical usage distribution.
+
+### D-3.4: regress_rate as standalone function in efficiency.py
+
+**Decision:** Implement empirical Bayes regression-to-mean as a single pure function `regress_rate(observed, sample_size, prior, regression_sample)` in the efficiency module.
+
+**Why:** This formula — `(observed × N + prior × k) / (N + k)` — is the core shrinkage mechanism used throughout the projection system. Making it a named, testable function (rather than inline math) means: (1) the exact formula is verified by a known-value test (`regress_rate(0.06, 500, 0.045, 1500) == 0.04875`), (2) Phase 5 models can import and reuse it, and (3) the regression_sample values are configurable per stat in `model.yaml`.
+
+### D-3.5: Availability age discounts by position
+
+**Decision:** Apply per-position age discount thresholds (QB 37, RB 28, WR 31, TE 31, K 38) that reduce projected games by 0.5 per year over the threshold.
+
+**Why:** Aging curves differ dramatically by position. RBs decline earliest (late 20s), while QBs and kickers can produce well into their late 30s. A blanket age penalty would over-penalize QBs and under-penalize RBs. The 0.5 games/year discount is conservative — enough to flag old players but not so aggressive that a 30-year-old RB gets projected for 5 games. The thresholds are hardcoded because they reflect well-established football priors, not league-specific settings.
+
+### D-3.6: Manual factors as CSV with validation gates
+
+**Decision:** Store manual factors in a plain CSV with strict validation: reject rows with score_raw outside [0,1], missing owner, or missing rationale. Expire rows past their `expires_at` date.
+
+**Why:** The requirements (FR-009, FR-010, NFR-014) demand that manual inputs be explicit, auditable, and governed. CSV is the simplest format an analyst can edit in any spreadsheet tool. The validation gates enforce the governance requirements at load time — a factor without ownership or rationale is rejected, not silently included. Expiration prevents stale preseason assessments from persisting into later runs.
+
+---
+
 ## Phase 2 — Data Ingestion & Canonical Transform
 
 ### D-2.1: Registry pattern for source extractors
