@@ -4,6 +4,40 @@ Records why specific implementation choices were made. Organized by phase.
 
 ---
 
+## Phase 6 — Overlay, Ranking, QA & Export
+
+### D-6.1: Overlay applied to P50 points, not to raw per-game stats
+
+**Decision:** The manual overlay multiplier is applied to the P50 fantasy point total from the uncertainty module, not to individual per-game stat projections.
+
+**Why:** Applying multipliers to individual stats would require deciding which stats to adjust (all of them? just volume? efficiency?) and could produce implausible stat lines. Adjusting the point total is simpler, transparent, and matches the design doc's intent: "overlay_adjusted = model_only × combined_multiplier." The delta between model-only and overlay-adjusted is published, making the overlay impact fully auditable.
+
+### D-6.2: Team-level manual factors applied to all players on that team
+
+**Decision:** When a manual factor has `entity_type="team"`, it applies to every player whose `player_id` matches that team (for DST) or who is rostered on that team. Team and player factors combine multiplicatively.
+
+**Why:** Team-level factors (e.g., coaching quality, offensive line upgrade) affect all players on the team. The requirements specify both team-level and player-level factors. Combining them multiplicatively means a 5% team boost and a 10% player boost give a ~15.5% total adjustment, which is more realistic than additive stacking.
+
+### D-6.3: VOR uses simple Nth-player replacement level
+
+**Decision:** Replacement level for each position is the total points of the Nth-ranked player at that position, where N comes from `ranking.yaml` (e.g., QB: 20). VOR = player_points - replacement_level.
+
+**Why:** The requirements specify "simple" VOR method as the default. More complex methods (e.g., auction value, draft position-weighted) are deferred. The Nth-player approach is transparent and widely understood in fantasy analysis. The replacement levels are configurable per position in `ranking.yaml`.
+
+### D-6.4: QA checks warn but don't halt the pipeline
+
+**Decision:** QA check failures are logged as warnings and included in the QA results, but the pipeline continues to export. There is no hard gate that prevents output generation on QA failure.
+
+**Why:** In practice, some QA checks may fail for legitimate reasons (e.g., a fringe player with unusual stats triggering a range check). Halting the pipeline forces the user to investigate every single failure before seeing any output. Logging warnings and publishing the results gives the user visibility to decide which failures matter. The QA results list is available programmatically for downstream consumers that want stricter enforcement.
+
+### D-6.5: Pipeline caching checks for file existence, not content
+
+**Decision:** Each pipeline step checks whether its output files exist (e.g., `_manifest.json` for ingest, `player_week_fact.parquet` for transform) to decide whether to skip that step. It does not re-verify file content hashes.
+
+**Why:** Content-hash verification would require reading all Parquet files on every run, which is expensive for the PBP-derived tables. The existing manifest mechanism in ingest already tracks content hashes. For other steps, idempotency is guaranteed by the deterministic pipeline — same inputs produce same outputs. If a user wants to force re-execution, they can delete the output directory.
+
+---
+
 ## Phase 5 — Position Models & Uncertainty
 
 ### D-5.1: DST counting stats from league averages scaled by quality factor

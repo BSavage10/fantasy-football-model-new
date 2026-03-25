@@ -23,6 +23,8 @@ uv run python -m ffmodel ingest --as-of-date 2025-09-01
 uv run python -m ffmodel transform --as-of-date 2025-09-01
 uv run python -m ffmodel features --as-of-date 2025-09-01
 uv run python -m ffmodel project --as-of-date 2025-09-01
+uv run python -m ffmodel rank --as-of-date 2025-09-01
+uv run python -m ffmodel run --as-of-date 2025-09-01   # full pipeline end-to-end
 ```
 
 ## Architecture
@@ -33,7 +35,7 @@ uv run python -m ffmodel project --as-of-date 2025-09-01
 Bronze (raw)   → data/raw/{as_of_date}/     ← nfl_data_py extracts + _manifest.json
 Silver (canon) → data/silver/{as_of_date}/   ← 5 normalized Parquet tables
 Gold (features)→ data/gold/{as_of_date}/     ← 5 feature Parquet tables + manual factors
-Outputs        → outputs/{run_id}/           ← Phase 6 (planned)
+Outputs        → outputs/{run_id}/           ← rankings/ (CSV + Parquet) + projections/ (run metadata)
 ```
 
 Ingest is idempotent: skips re-extraction if `_manifest.json` exists. Delete manifest to force re-pull.
@@ -59,7 +61,7 @@ Each module defines its schema as a `COLUMNS` list at the top of the file.
 
 ### CLI
 
-Entry point: `ffmodel.cli:main`. Seven subcommands defined; `ingest`, `transform`, `features`, and `project` are wired. Others print "not yet implemented". Dispatch table in `cli.py`.
+Entry point: `ffmodel.cli:main`. Seven subcommands defined; `ingest`, `transform`, `features`, `project`, `rank`, and `run` are wired. `backtest` prints "not yet implemented". Dispatch table in `cli.py`.
 
 ### Gold Tables
 
@@ -102,13 +104,31 @@ Stats dict keys match `player_week_fact` column names for offensive players.
 
 `run_projections()` in `__init__.py` orchestrates all six position projectors. Output: `outputs/projections_{as_of_date}/projections.parquet` + `uncertainty.parquet`.
 
+### Overlay & Ranking Layer
+
+`ffmodel/overlay/applicator.py` — manual overlay math:
+- `dampen_score()` — dampens low-confidence factors toward neutral (0.50)
+- `factor_to_multiplier()` — converts dampened 0-to-1 score to multiplicative adjustment
+- `combine_multipliers()` — multiplies all factors, caps total at ±max_total_effect (default ±25%)
+- `apply_overlays()` — orchestrates dampening, conversion, combination for all players
+
+`ffmodel/ranking/ranker.py` — ranking and VOR:
+- `compute_rankings()` — sorts by total_points (P50 median or P75 upside), assigns position_rank and overall_rank, computes VOR from replacement levels in `ranking.yaml`
+- `rankings_to_dataframe()` — serializes ranked players to DataFrame
+
+`ffmodel/qa/checks.py` — 12 quality checks (QC-001 through QC-012): duplicate keys, canonical IDs, team share tolerance, range checks, scoring reconciliation, missingness, leakage, manual factor metadata, opportunity cap, DST brackets, kicker reconciliation, output schema.
+
+`ffmodel/export/writer.py` — writes player_projection, dst_projection, kicker_projection (CSV + Parquet), combined_rankings.csv, schema.json, projection_run_fact.parquet.
+
+`ffmodel/pipeline.py` — `run_pipeline()` orchestrates full end-to-end (ingest → transform → features → project → overlay → rank → QA → export) with idempotent caching. `generate_run_id()` format: `{as_of_date}_{YYYYMMDD_HHMMSS}_{config_hash[:8]}`.
+
 ### Phase Status
 
-Phases 1–5 (foundation, ingest + transform, features, scoring engine, position models) are complete. Phases 6–7 (ranking/export, backtest) are planned. See `docs/implementation-plan.md` for full spec.
+Phases 1–6 (foundation, ingest + transform, features, scoring engine, position models, overlay/ranking/QA/export) are complete. Phase 7 (backtest) is planned. See `docs/implementation-plan.md` for full spec.
 
 ## Testing
 
-147 tests (20 config, 30 transform, 36 features, 28 scoring, 33 models). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
+215 tests (20 config, 30 transform, 36 features, 28 scoring, 33 models, 20 overlay, 12 ranking, 22 QA, 14 pipeline/export). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
 
 ## Key Docs
 

@@ -4,6 +4,21 @@ All notable changes to the ffmodel projection system, organized by implementatio
 
 ---
 
+## Phase 6 — Overlay, Ranking, QA & Export (2026-03-24)
+
+### Added
+- **Overlay layer** (`ffmodel/overlay/applicator.py`): Manual overlay math — `dampen_score()` (low-confidence dampening toward neutral), `factor_to_multiplier()` (0-to-1 → multiplicative adjustment), `combine_multipliers()` (multiplicative aggregation with cap), `apply_overlays()` (orchestrator that merges player + team factors). `OverlayResult` dataclass captures model-only, adjusted, delta, manual_heavy flag.
+- **Ranking layer** (`ffmodel/ranking/ranker.py`): `compute_rankings()` sorts by total_points (P50 for median objective, P75 for upside), assigns 1-indexed position_rank and overall_rank, computes VOR from configurable replacement levels. `rankings_to_dataframe()` for serialization. `RankedPlayer` dataclass.
+- **QA checks** (`ffmodel/qa/checks.py`): 12 checks (QC-001 through QC-012) — duplicate keys, canonical IDs, team share tolerance, range checks, scoring reconciliation, missingness, leakage prevention, manual factor metadata, opportunity cap, DST bracket validation, kicker reconciliation, output schema validation. `run_all_checks()` orchestrator returns `list[QAResult]`.
+- **Export writer** (`ffmodel/export/writer.py`): `write_outputs()` writes player_projection, dst_projection, kicker_projection (CSV + Parquet each), combined_rankings.csv, schema.json, and projection_run_fact.parquet with run metadata (run_id, as_of_date, config_hash, git SHA, timestamp).
+- **Pipeline orchestrator** (`ffmodel/pipeline.py`): `run_pipeline()` executes full end-to-end pipeline (ingest → transform → features → project → uncertainty → overlay → rank → QA → export) with idempotent caching at each step. `generate_run_id()` produces `{as_of_date}_{timestamp}_{config_hash[:8]}`.
+- **68 Phase 6 tests**: `test_overlay.py` (20 tests — dampening, multiplier math, combine caps, integration), `test_ranking.py` (12 tests — ranking order, position ranks, VOR, upside objective, flags), `test_qa.py` (22 tests — each QC check pass/fail), `test_pipeline.py` (14 tests — run_id format, file creation, schema, metadata, CLI parsing).
+
+### Changed
+- `ffmodel/cli.py` — Added `_cmd_rank` and `_cmd_run` handlers, wired both into dispatch table. `rank` runs overlay → rank → export; `run` delegates to `run_pipeline()`.
+
+---
+
 ## Phase 5 — Position Models & Uncertainty (2026-03-24)
 
 ### Added

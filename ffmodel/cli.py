@@ -37,6 +37,87 @@ def _cmd_ingest(args: argparse.Namespace) -> None:
     print(f"[ffmodel] ingest complete → {out_dir}")
 
 
+def _cmd_rank(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    import pandas as pd
+
+    from ffmodel.export.writer import write_outputs
+    from ffmodel.models import (
+        compute_all_uncertainty,
+        projections_to_dataframe,
+        run_projections,
+    )
+    from ffmodel.overlay.applicator import apply_overlays
+    from ffmodel.ranking.ranker import compute_rankings, rankings_to_dataframe
+
+    config = load_project_config(args.config_dir)
+    data_dir = Path(args.data_dir)
+    silver_dir = data_dir / "silver" / args.as_of_date
+    gold_dir = data_dir / "gold" / args.as_of_date
+
+    if not gold_dir.exists():
+        print(f"[ffmodel] Gold data not found at {gold_dir} — run features first", file=sys.stderr)
+        sys.exit(1)
+
+    team_context_df = pd.read_parquet(gold_dir / "team_context_features.parquet")
+    role_df = pd.read_parquet(gold_dir / "player_role_features.parquet")
+    efficiency_df = pd.read_parquet(gold_dir / "player_efficiency_features.parquet")
+    availability_df = pd.read_parquet(gold_dir / "availability_features.parquet")
+    player_week_fact = pd.read_parquet(silver_dir / "player_week_fact.parquet")
+    team_week_fact = pd.read_parquet(silver_dir / "team_week_fact.parquet")
+
+    projections = run_projections(
+        team_context_df, role_df, efficiency_df, availability_df,
+        player_week_fact, team_week_fact,
+        config.scoring, config.model, config.sources.seasons.target,
+    )
+
+    uncertainty = compute_all_uncertainty(
+        projections, config.scoring,
+        n_samples=config.model.uncertainty.n_samples,
+    )
+
+    proj_df = projections_to_dataframe(projections)
+    unc_records = [
+        {"player_id": u.player_id, "position": u.position,
+         "fantasy_points_p25": u.fantasy_points_p25,
+         "fantasy_points_p50": u.fantasy_points_p50,
+         "fantasy_points_p75": u.fantasy_points_p75}
+        for u in uncertainty
+    ]
+    unc_df = pd.DataFrame(unc_records)
+
+    manual_factors_path = gold_dir / "manual_factor_features.parquet"
+    if manual_factors_path.exists():
+        manual_factors_df = pd.read_parquet(manual_factors_path)
+    else:
+        manual_factors_df = pd.DataFrame(columns=[
+            "entity_id", "entity_type", "factor_name",
+            "score_normalized", "confidence",
+        ])
+
+    overlay_results = apply_overlays(proj_df, unc_df, manual_factors_df, config.model.overlay)
+    ranked = compute_rankings(overlay_results, proj_df, unc_df, config.ranking)
+
+    from ffmodel.pipeline import generate_run_id
+    run_id = generate_run_id(args.as_of_date, config.config_hash)
+    run_dir = write_outputs(ranked, run_id, args.as_of_date, config.config_hash)
+
+    print(f"[ffmodel] rank complete → {run_dir} ({len(ranked)} players ranked)")
+
+
+def _cmd_run(args: argparse.Namespace) -> None:
+    from ffmodel.pipeline import run_pipeline
+
+    config = load_project_config(args.config_dir)
+    run_dir = run_pipeline(
+        config, args.as_of_date,
+        data_dir=args.data_dir,
+    )
+    print(f"[ffmodel] run complete → {run_dir}")
+
+
 def _cmd_project(args: argparse.Namespace) -> None:
     from pathlib import Path
 
@@ -252,6 +333,8 @@ def main(argv: list[str] | None = None) -> None:
         "transform": _cmd_transform,
         "features": _cmd_features,
         "project": _cmd_project,
+        "rank": _cmd_rank,
+        "run": _cmd_run,
     }
 
     handler = dispatch.get(args.command)

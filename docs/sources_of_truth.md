@@ -23,7 +23,7 @@ All config values are loaded into frozen dataclasses via `ffmodel/config.py`. Th
 | Bronze (raw) | `data/raw/{as_of_date}/` | `ffmodel/ingest/snapshot.py` | Parquet + `_manifest.json` |
 | Silver (canonical) | `data/silver/{as_of_date}/` | `ffmodel/transform/*.py` | Parquet |
 | Gold (features) | `data/gold/{as_of_date}/` | `ffmodel/features/*.py` | Parquet |
-| Outputs | `outputs/{run_id}/` | `ffmodel/export/writer.py` (Phase 6) | Parquet + CSV |
+| Outputs | `outputs/{run_id}/` | `ffmodel/export/writer.py` | Parquet + CSV + JSON |
 
 ## Silver Table Schemas
 
@@ -110,6 +110,25 @@ Per-game stat keys by position:
 | `expected_pa_bracket_value()` | `ffmodel/scoring/engine.py` | Monte Carlo expected bracket value accounting for PA variance (Jensen's inequality) |
 | `compute_secondary_rates()` | `ffmodel/models/base.py` | Recency-weighted rush_td_rate and fumble_rate from player_week_fact |
 | `compute_uncertainty()` | `ffmodel/models/uncertainty.py` | Bootstrap P25/P50/P75 via position-specific CV perturbation |
+| `dampen_score()` | `ffmodel/overlay/applicator.py` | Dampen low-confidence manual factor toward neutral (0.50) |
+| `factor_to_multiplier()` | `ffmodel/overlay/applicator.py` | Convert dampened 0-to-1 score to multiplicative adjustment |
+| `combine_multipliers()` | `ffmodel/overlay/applicator.py` | Multiplicatively aggregate factors with ±max_total_effect cap |
+| `compute_rankings()` | `ffmodel/ranking/ranker.py` | Sort, assign position/overall rank, compute VOR |
+| `run_all_checks()` | `ffmodel/qa/checks.py` | Execute all 12 QA checks (QC-001 through QC-012) |
+
+## Overlay, Ranking & Export
+
+| Component | Module | Key Function |
+|-----------|--------|-------------|
+| Overlay math | `ffmodel/overlay/applicator.py` | `apply_overlays()` — dampens, converts, combines, caps manual factor adjustments |
+| Ranking layer | `ffmodel/ranking/ranker.py` | `compute_rankings()` — sorts, assigns ranks, computes VOR |
+| QA checks | `ffmodel/qa/checks.py` | `run_all_checks()` — 12 checks (QC-001 through QC-012) |
+| Export writer | `ffmodel/export/writer.py` | `write_outputs()` — CSV + Parquet + schema.json + run metadata |
+| Pipeline orchestrator | `ffmodel/pipeline.py` | `run_pipeline()` — end-to-end with idempotent caching |
+
+Output schema is defined in `ffmodel/export/writer.py:OUTPUT_SCHEMA` and written to `schema.json` in each run.
+
+Run metadata is captured in `projection_run_fact.parquet` with: run_id, as_of_date, config_hash, git_sha, timestamp, total_players_ranked.
 
 ## Manual Factors
 
@@ -124,6 +143,10 @@ Manual overlay inputs are stored in `manual/manual_factors.csv`. Required column
 | `tests/test_features.py` | All 5 feature modules — share sums, leakage prevention, regress_rate math, rookies, team changers, availability, manual factor validation | 36 |
 | `tests/test_scoring.py` | All 4 scoring functions — QB exact total, RB half-PPR, WR cross-position, kicker, DST component+bracket, reconciliation, config change sensitivity | 28 |
 | `tests/test_models.py` | All 6 position projectors, baselines, uncertainty — required stats per position, season_total consistency, rookies, team changers, P25≤P50≤P75, orchestrator | 33 |
+| `tests/test_overlay.py` | Overlay applicator — dampening, multiplier math, combine caps, integration with overlays enabled/disabled | 20 |
+| `tests/test_ranking.py` | Ranking layer — ranking order, position ranks, VOR, upside objective, rookie/team changer flags, replacement levels | 12 |
+| `tests/test_qa.py` | QA checks — all 12 QC checks with pass/fail scenarios | 22 |
+| `tests/test_pipeline.py` | Pipeline & export — run_id format, file creation, schema.json, run metadata, CLI parsing | 14 |
 
 ## Design Document
 

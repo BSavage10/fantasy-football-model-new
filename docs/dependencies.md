@@ -44,7 +44,12 @@ CLI (cli.py)
   │              models/kicker.py
   │              models/uncertainty.py → outputs/projections_{as_of_date}/uncertainty.parquet
   │
-  ├─ rank     (Phase 6) ──→ outputs/{run_id}/rankings/
+  ├─ rank    ──→ overlay/applicator.py ──→ ranking/ranker.py ──→ export/writer.py
+  │              qa/checks.py            outputs/{run_id}/rankings/
+  │
+  ├─ run     ──→ pipeline.py (orchestrates all above steps end-to-end)
+  │              outputs/{run_id}/rankings/ + projections/
+  │
   └─ backtest (Phase 7) ──→ outputs/backtest/
 ```
 
@@ -157,24 +162,40 @@ Gold features + Silver data ──→ Position models
 
 `__init__.py` contains `run_projections()` which orchestrates all six projectors and `projections_to_dataframe()` for serialization.
 
-### Future Dependencies (Phases 6–7)
+### Overlay, Ranking, QA & Export Layer (Phase 6 — complete)
 
 ```
-Projections ──→ scoring/engine.py (score stats → fantasy points)
-            ──→ Overlay applicator (Phase 6)
-            ──→ Ranking layer (Phase 6)
-            ──→ QA checks (Phase 6)
-            ──→ Export writer (Phase 6)
+Projections + Uncertainty ──→ overlay/applicator.py
+                                 │  (manual_factor_features + OverlayConfig)
+                                 │
+                                 └──→ ranking/ranker.py
+                                         │  (RankingConfig — objective, replacement levels)
+                                         │
+                                         ├──→ qa/checks.py (12 QA checks)
+                                         │
+                                         └──→ export/writer.py
+                                                  │
+                                                  └──→ outputs/{run_id}/
+                                                         ├─ rankings/ (CSV + Parquet + schema.json)
+                                                         └─ projections/ (projection_run_fact.parquet)
+```
+
+`pipeline.py` orchestrates the full end-to-end flow (ingest → transform → features → project → overlay → rank → QA → export) with idempotent caching.
+
+### Future Dependencies (Phase 7)
+
+```
+Pipeline ──→ backtest.py (rolling-origin historical evaluation)
 ```
 
 ## Config → Module Relationships
 
 | Config | Consumed By |
 |--------|------------|
-| `ScoringConfig` | `scoring/engine.py`, `models/uncertainty.py`, `models/baselines.py`, `models/dst.py` |
-| `LeagueConfig` | `ranking/ranker.py` (Phase 6) |
-| `ModelConfig` | `features/*.py`, `models/dst.py`, `models/kicker.py`, `overlay/applicator.py` (Phase 6) |
-| `RankingConfig` | `ranking/ranker.py` (Phase 6) |
+| `ScoringConfig` | `scoring/engine.py`, `models/uncertainty.py`, `models/baselines.py`, `models/dst.py`, `qa/checks.py` |
+| `LeagueConfig` | (future: roster-count-based replacement levels) |
+| `ModelConfig` | `features/*.py`, `models/dst.py`, `models/kicker.py`, `overlay/applicator.py` (OverlayConfig) |
+| `RankingConfig` | `ranking/ranker.py` |
 | `SourcesConfig` | `ingest/snapshot.py` |
 
 ## Test Dependencies
@@ -186,3 +207,7 @@ Projections ──→ scoring/engine.py (score stats → fantasy points)
 | `test_features.py` | Own fixtures (synthetic DataFrames) | All 5 feature modules + `regress_rate()` |
 | `test_scoring.py` | `conftest.py` (`configs_dir`) | `scoring/engine.py` — all 4 scoring functions |
 | `test_models.py` | Own fixtures (gold-layer DFs + silver-layer DFs) + `conftest.py` (`configs_dir`) | All 10 model modules — 6 projectors, baselines, uncertainty, base utils, orchestrator |
+| `test_overlay.py` | Own fixtures (synthetic DFs + OverlayConfig) | `overlay/applicator.py` — dampening, multiplier math, combination caps, integration |
+| `test_ranking.py` | Own fixtures (OverlayResults + DFs + RankingConfig) | `ranking/ranker.py` — ranking order, position ranks, VOR, upside objective |
+| `test_qa.py` | Own fixtures (synthetic DFs + ScoringConfig) | `qa/checks.py` — all 12 QC checks pass/fail scenarios |
+| `test_pipeline.py` | Own fixtures (RankedPlayer list) + `tmp_path` | `pipeline.py`, `export/writer.py`, `cli.py` — run_id format, file creation, schema, metadata |
