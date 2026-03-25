@@ -76,6 +76,30 @@ Fantasy point scoring is implemented in `ffmodel/scoring/engine.py` as four pure
 
 Scoring config lives in `configs/scoring.yaml`. All stat-to-point conversions are config-driven (FR-004).
 
+## Position Model Schemas
+
+Projection output is a `StatProjection` dataclass defined in `ffmodel/models/base.py`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `per_game` | `dict[str, float]` | Per-game stat projections (keys vary by position) |
+| `season_total` | `dict[str, float]` | `per_game × games_active` |
+| `games_active` | `float` | Projected games played |
+| `position` | `str` | QB, RB, WR, TE, DEF, K |
+| `player_id` | `str` | `canonical_player_id` for offense; team abbr for DST/K |
+| `reason_codes` | `list[str]` | e.g., "rookie_prior_used", "team_changer_blend", "mobile_qb" |
+| `is_rookie` / `is_team_changer` | `bool` | Player situation flags |
+
+Per-game stat keys by position:
+
+| Position | Stats |
+|----------|-------|
+| QB | pass_att, pass_cmp, pass_yd, pass_td, interceptions, rush_att, rush_yd, rush_td, fumbles_lost |
+| RB | rush_att, rush_yd, rush_td, targets, receptions, rec_yd, rec_td, fumbles_lost |
+| WR/TE | targets, receptions, rec_yd, rec_td, rush_att, rush_yd, rush_td, fumbles_lost |
+| DEF | sacks, interceptions, fumble_recoveries, dst_td, safeties, block_kicks, return_tds, extra_point_returns, points_allowed, points_allowed_bracket_value |
+| K | pat_made, fg_0_19, fg_20_29, fg_30_39, fg_40_49, fg_50_plus |
+
 ## Key Algorithms
 
 | Function | Module | Purpose |
@@ -84,6 +108,8 @@ Scoring config lives in `configs/scoring.yaml`. All stat-to-point conversions ar
 | `_normalize_shares_within_team()` | `ffmodel/features/player_role.py` | Proportionally scale shares to sum ≤1.0 per team |
 | `_bracket_lookup()` | `ffmodel/scoring/engine.py` | Direct lookup of DST points-allowed bracket for a given PA total |
 | `expected_pa_bracket_value()` | `ffmodel/scoring/engine.py` | Monte Carlo expected bracket value accounting for PA variance (Jensen's inequality) |
+| `compute_secondary_rates()` | `ffmodel/models/base.py` | Recency-weighted rush_td_rate and fumble_rate from player_week_fact |
+| `compute_uncertainty()` | `ffmodel/models/uncertainty.py` | Bootstrap P25/P50/P75 via position-specific CV perturbation |
 
 ## Manual Factors
 
@@ -97,6 +123,7 @@ Manual overlay inputs are stored in `manual/manual_factors.csv`. Required column
 | `tests/test_transform.py` | All 5 silver table transforms — uniqueness, schemas, types, normalization | 30 |
 | `tests/test_features.py` | All 5 feature modules — share sums, leakage prevention, regress_rate math, rookies, team changers, availability, manual factor validation | 36 |
 | `tests/test_scoring.py` | All 4 scoring functions — QB exact total, RB half-PPR, WR cross-position, kicker, DST component+bracket, reconciliation, config change sensitivity | 28 |
+| `tests/test_models.py` | All 6 position projectors, baselines, uncertainty — required stats per position, season_total consistency, rookies, team changers, P25≤P50≤P75, orchestrator | 33 |
 
 ## Design Document
 

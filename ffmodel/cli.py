@@ -37,6 +37,62 @@ def _cmd_ingest(args: argparse.Namespace) -> None:
     print(f"[ffmodel] ingest complete → {out_dir}")
 
 
+def _cmd_project(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    import pandas as pd
+
+    from ffmodel.models import (
+        compute_all_uncertainty,
+        projections_to_dataframe,
+        run_projections,
+    )
+
+    config = load_project_config(args.config_dir)
+    data_dir = Path(args.data_dir)
+    silver_dir = data_dir / "silver" / args.as_of_date
+    gold_dir = data_dir / "gold" / args.as_of_date
+
+    if not gold_dir.exists():
+        print(f"[ffmodel] Gold data not found at {gold_dir} — run features first", file=sys.stderr)
+        sys.exit(1)
+
+    team_context_df = pd.read_parquet(gold_dir / "team_context_features.parquet")
+    role_df = pd.read_parquet(gold_dir / "player_role_features.parquet")
+    efficiency_df = pd.read_parquet(gold_dir / "player_efficiency_features.parquet")
+    availability_df = pd.read_parquet(gold_dir / "availability_features.parquet")
+    player_week_fact = pd.read_parquet(silver_dir / "player_week_fact.parquet")
+    team_week_fact = pd.read_parquet(silver_dir / "team_week_fact.parquet")
+
+    projections = run_projections(
+        team_context_df, role_df, efficiency_df, availability_df,
+        player_week_fact, team_week_fact,
+        config.scoring, config.model, config.sources.seasons.target,
+    )
+
+    uncertainty = compute_all_uncertainty(
+        projections, config.scoring,
+        n_samples=config.model.uncertainty.n_samples,
+    )
+
+    out_dir = Path("outputs") / f"projections_{args.as_of_date}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    proj_df = projections_to_dataframe(projections)
+    proj_df.to_parquet(out_dir / "projections.parquet", index=False)
+
+    unc_records = [
+        {"player_id": u.player_id, "position": u.position,
+         "fantasy_points_p25": u.fantasy_points_p25,
+         "fantasy_points_p50": u.fantasy_points_p50,
+         "fantasy_points_p75": u.fantasy_points_p75}
+        for u in uncertainty
+    ]
+    pd.DataFrame(unc_records).to_parquet(out_dir / "uncertainty.parquet", index=False)
+
+    print(f"[ffmodel] project complete → {out_dir} ({len(projections)} projections)")
+
+
 def _cmd_features(args: argparse.Namespace) -> None:
     from pathlib import Path
 
@@ -195,6 +251,7 @@ def main(argv: list[str] | None = None) -> None:
         "ingest": _cmd_ingest,
         "transform": _cmd_transform,
         "features": _cmd_features,
+        "project": _cmd_project,
     }
 
     handler = dispatch.get(args.command)

@@ -4,6 +4,28 @@ All notable changes to the ffmodel projection system, organized by implementatio
 
 ---
 
+## Phase 5 — Position Models & Uncertainty (2026-03-24)
+
+### Added
+- **Models package** (`ffmodel/models/`): Six position projectors, baselines, and uncertainty estimation.
+  - `base.py` — `StatProjection` and `UncertaintyResult` dataclasses, `weighted_mean()`, `make_season_totals()`, `compute_secondary_rates()` (rush_td_rate + fumble_rate from historical data), league-average efficiency/rate constants.
+  - `qb.py` — QB projector: team_targets × starter_share × efficiency rates → pass_att, pass_cmp, pass_yd, pass_td, interceptions, rush_att, rush_yd, rush_td, fumbles_lost.
+  - `rb.py` — RB projector: team_rushes × rush_share + team_targets × target_share × catch/receiving rates → rush_att, rush_yd, rush_td, targets, receptions, rec_yd, rec_td, fumbles_lost.
+  - `wr.py` — WR projector: target-share driven receiving + optional rush stats.
+  - `te.py` — TE projector: same structure as WR with TE-specific defaults.
+  - `dst.py` — DST projector: league-average counting stats (sacks, INTs, fumble recoveries, DST TDs) scaled by defensive quality factor from points-allowed; `expected_pa_bracket_value()` for nonlinear bracket scoring.
+  - `kicker.py` — Kicker projector: league-average XP/FG per game scaled by team scoring rate, FG distributed across 5 distance buckets.
+  - `baselines.py` — `baseline_weighted_history()` (recency-weighted historical fantasy points) and `baseline_last_year()` (prior season's actual points) for challenger comparison.
+  - `uncertainty.py` — `compute_uncertainty()` and `compute_all_uncertainty()`: bootstrap perturbation with position-specific CVs for per-game stats + games_active std; scores each sample; returns P25/P50/P75.
+  - `__init__.py` — `run_projections()` orchestrator (calls all 6 position projectors), `projections_to_dataframe()` for Parquet serialization.
+- **33 model tests** (`tests/test_models.py`): QB/RB/WR/TE/DST/Kicker required stats, season_total consistency (per_game × games ≈ total within 0.1), rookie non-null projections with league-avg efficiency, team changer using new team's context, P25 ≤ P50 ≤ P75 for all positions, deterministic uncertainty with seed, baseline non-empty results, orchestrator produces all 6 positions.
+
+### Changed
+- `ffmodel/cli.py` — Added `_cmd_project` handler (loads gold + silver data, runs projections + uncertainty, writes to `outputs/projections_{as_of_date}/`) and wired it into dispatch table.
+- `CLAUDE.md` — Updated architecture, CLI, phase status, and test counts.
+
+---
+
 ## Phase 4 — Scoring Engine (2026-03-24)
 
 ### Added

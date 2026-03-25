@@ -4,6 +4,40 @@ Records why specific implementation choices were made. Organized by phase.
 
 ---
 
+## Phase 5 — Position Models & Uncertainty
+
+### D-5.1: DST counting stats from league averages scaled by quality factor
+
+**Decision:** DST counting stats (sacks, INTs, fumble recoveries, DST TDs) use league-average per-game rates scaled by a defensive quality factor derived from points-allowed: `quality = (league_avg_pa / team_pa)^0.5`.
+
+**Why:** The silver/gold layers don't contain team-level defensive counting stats (sacks forced, INTs forced, etc.) — `team_week_fact` has offensive stats per team. Deriving defensive stats via schedule-opponent matching would add significant complexity for marginal accuracy in a v1 model. The square-root scaling dampens the quality factor so a slightly-better-than-average defense doesn't get wildly inflated counting stats. This aligns with AD-5 ("lighter-weight models" for DST/K).
+
+### D-5.2: Kicker stats from team scoring rate × league averages
+
+**Decision:** Kicker projections estimate XP and FG volume by scaling league-average rates (3.0 XP/game, 1.85 FG/game) by the team's points-per-game relative to league average. FG distance distribution uses fixed league-average proportions.
+
+**Why:** We don't ingest kicker-specific historical data (FG makes by distance bucket) into the silver layer. Team scoring rate is a good proxy for kicker opportunity volume — higher-scoring teams attempt more XPs and FGs. The distance distribution is stable across teams at the league level, so fixed proportions are a reasonable v1 assumption.
+
+### D-5.3: Secondary rates (rush_td_rate, fumble_rate) computed from player_week_fact
+
+**Decision:** Position projectors receive pre-computed "secondary rates" (rush_td_rate per attempt, fumble_rate per touch) derived from player_week_fact using the same recency-weighting approach as the gold features. Rookies without history fall back to position-specific league averages.
+
+**Why:** The gold-layer efficiency features cover primary rates (YPA, comp%, TD%, INT%, YPC, catch_rate, yards_per_target, rec_TD%) but not rush_td_rate or fumble_rate. These secondary rates are needed to complete the projection (especially rush TDs for QBs and RBs). Computing them from historical data with recency weighting is consistent with the rest of the pipeline.
+
+### D-5.4: Uncertainty via position-specific CV perturbation (not backtest residuals)
+
+**Decision:** Bootstrap uncertainty uses position-specific coefficients of variation (QB 15%, RB 25%, WR 20%, TE 25%) to perturb per-game stats, rather than historical (actual - projected) residuals from a backtest.
+
+**Why:** Backtest residuals require Phase 7's rolling-origin backtest to compute — they're a chicken-and-egg problem for Phase 5. The CV approach produces meaningful uncertainty bands that capture the key insight: RBs are more volatile than QBs, positional injury risk varies, etc. When Phase 7 lands, the uncertainty module can be upgraded to use empirical residuals.
+
+### D-5.5: Projectors take gold features + secondary rates, not raw silver data
+
+**Decision:** Offensive projectors (QB/RB/WR/TE) take pre-built gold DataFrames (team_context, role, efficiency, availability) plus a pre-computed secondary_rates dict. DST/Kicker projectors additionally take team_week_fact since they need team-level historical data not captured in the gold layer.
+
+**Why:** This keeps the projectors focused on the DAG computation (volume × share × efficiency = stats) without re-implementing feature engineering. The gold features already contain recency-weighted, regressed, normalized values. The CLI handler loads both gold and silver data, computes secondary rates once, and passes everything to `run_projections()`.
+
+---
+
 ## Phase 4 — Scoring Engine
 
 ### D-4.1: score_player applies all rules regardless of position

@@ -22,6 +22,7 @@ uv run pytest tests/test_config.py::TestScoringConfig::test_loads_offense -v
 uv run python -m ffmodel ingest --as-of-date 2025-09-01
 uv run python -m ffmodel transform --as-of-date 2025-09-01
 uv run python -m ffmodel features --as-of-date 2025-09-01
+uv run python -m ffmodel project --as-of-date 2025-09-01
 ```
 
 ## Architecture
@@ -58,7 +59,7 @@ Each module defines its schema as a `COLUMNS` list at the top of the file.
 
 ### CLI
 
-Entry point: `ffmodel.cli:main`. Seven subcommands defined; `ingest`, `transform`, and `features` are wired. Others print "not yet implemented". Dispatch table in `cli.py`.
+Entry point: `ffmodel.cli:main`. Seven subcommands defined; `ingest`, `transform`, `features`, and `project` are wired. Others print "not yet implemented". Dispatch table in `cli.py`.
 
 ### Gold Tables
 
@@ -82,13 +83,32 @@ Key functions: `regress_rate()` in `efficiency.py` (empirical Bayes shrinkage), 
 
 Stats dict keys match `player_week_fact` column names for offensive players.
 
+### Position Models
+
+`ffmodel/models/` — six position projectors + baselines + uncertainty:
+
+| Module | Position | Key Inputs |
+|--------|----------|------------|
+| `qb.py` | QB | team_targets × starter_share × efficiency rates |
+| `rb.py` | RB | team_rushes × rush_share + team_targets × target_share |
+| `wr.py` | WR | team_targets × target_share + optional rushing |
+| `te.py` | TE | team_targets × target_share |
+| `dst.py` | DEF | league-avg counting stats × quality factor + PA bracket |
+| `kicker.py` | K | league-avg FG/XP × team scoring factor |
+
+- `base.py` — `StatProjection` dataclass (per_game dict, season_total dict, games_active, reason_codes, is_rookie, is_team_changer), `compute_secondary_rates()` for rush_td_rate and fumble_rate
+- `baselines.py` — `baseline_weighted_history()` and `baseline_last_year()` for challenger comparison
+- `uncertainty.py` — Bootstrap P25/P50/P75 via position-specific CV perturbation of per-game stats and games_active
+
+`run_projections()` in `__init__.py` orchestrates all six position projectors. Output: `outputs/projections_{as_of_date}/projections.parquet` + `uncertainty.parquet`.
+
 ### Phase Status
 
-Phases 1–4 (foundation, ingest + transform, features, scoring engine) are complete. Phases 5–7 (models, ranking/export, backtest) are planned. See `docs/implementation-plan.md` for full spec.
+Phases 1–5 (foundation, ingest + transform, features, scoring engine, position models) are complete. Phases 6–7 (ranking/export, backtest) are planned. See `docs/implementation-plan.md` for full spec.
 
 ## Testing
 
-114 tests (20 config, 30 transform, 36 features, 28 scoring). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
+147 tests (20 config, 30 transform, 36 features, 28 scoring, 33 models). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
 
 ## Key Docs
 

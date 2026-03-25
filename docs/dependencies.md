@@ -10,7 +10,7 @@ How the system's components connect. Updated as the project evolves.
 nfl_data_py ──→ snapshot.py (data extraction)
 pandas ────────→ all transform & feature modules
 pyarrow ───────→ Parquet I/O throughout
-numpy ─────────→ team_week.py, team_context.py, player_role.py, efficiency.py, scoring/engine.py, future models
+numpy ─────────→ team_week.py, team_context.py, player_role.py, efficiency.py, scoring/engine.py, models/uncertainty.py
 scipy ─────────→ future models (regression, bootstrap)
 pyyaml ────────→ config.py (config loading)
 ```
@@ -35,7 +35,15 @@ CLI (cli.py)
   │               availability.py ───→ data/gold/{as_of_date}/availability_features.parquet
   │               manual_factors.py ─→ data/gold/{as_of_date}/manual_factor_features.parquet
   ├─ score    ──→ scoring/engine.py (stateless; no file I/O)
-  ├─ project  (Phase 5) ──→ outputs/{run_id}/projections/
+  │
+  ├─ project ──→ models/qb.py ──────→ outputs/projections_{as_of_date}/projections.parquet
+  │              models/rb.py
+  │              models/wr.py
+  │              models/te.py
+  │              models/dst.py
+  │              models/kicker.py
+  │              models/uncertainty.py → outputs/projections_{as_of_date}/uncertainty.parquet
+  │
   ├─ rank     (Phase 6) ──→ outputs/{run_id}/rankings/
   └─ backtest (Phase 7) ──→ outputs/backtest/
 ```
@@ -131,16 +139,27 @@ config.py (ScoringConfig)
 
 `scoring/engine.py` is a pure functions module. It has no file I/O and no dependencies on pandas or data tables — only `ScoringConfig` (from `config.py`) and `numpy`.
 
-### Future Dependencies (Phases 5–7)
-
-These are planned but not yet built:
+### Model Layer (Phase 5 — complete)
 
 ```
-Gold features ──→ Position models (Phase 5)
-                    │
-                    ├─ Each model reads: team_context + player_role + efficiency + availability
-                    └─ All models share: base.py (weighted_mean, regress_rate, StatProjection)
+Gold features + Silver data ──→ Position models
+                                   │
+                                   ├─ base.py (StatProjection, compute_secondary_rates, league avg constants)
+                                   ├─ qb.py:     role_df + team_context + efficiency + availability + secondary_rates
+                                   ├─ rb.py:     role_df + team_context + efficiency + availability + secondary_rates
+                                   ├─ wr.py:     role_df + team_context + efficiency + availability + secondary_rates
+                                   ├─ te.py:     role_df + team_context + efficiency + availability + secondary_rates
+                                   ├─ dst.py:    team_context + team_week_fact + scoring_config + model_config
+                                   ├─ kicker.py: team_context + team_week_fact + model_config
+                                   ├─ baselines.py: player_week_fact + scoring_config
+                                   └─ uncertainty.py: projections + scoring_config → P25/P50/P75
+```
 
+`__init__.py` contains `run_projections()` which orchestrates all six projectors and `projections_to_dataframe()` for serialization.
+
+### Future Dependencies (Phases 6–7)
+
+```
 Projections ──→ scoring/engine.py (score stats → fantasy points)
             ──→ Overlay applicator (Phase 6)
             ──→ Ranking layer (Phase 6)
@@ -152,9 +171,9 @@ Projections ──→ scoring/engine.py (score stats → fantasy points)
 
 | Config | Consumed By |
 |--------|------------|
-| `ScoringConfig` | `scoring/engine.py` (Phase 4), `models/uncertainty.py` (Phase 5) |
+| `ScoringConfig` | `scoring/engine.py`, `models/uncertainty.py`, `models/baselines.py`, `models/dst.py` |
 | `LeagueConfig` | `ranking/ranker.py` (Phase 6) |
-| `ModelConfig` | `features/*.py`, `models/*.py` (Phase 5), `overlay/applicator.py` (Phase 6) |
+| `ModelConfig` | `features/*.py`, `models/dst.py`, `models/kicker.py`, `overlay/applicator.py` (Phase 6) |
 | `RankingConfig` | `ranking/ranker.py` (Phase 6) |
 | `SourcesConfig` | `ingest/snapshot.py` |
 
@@ -166,3 +185,4 @@ Projections ──→ scoring/engine.py (score stats → fantasy points)
 | `test_transform.py` | Own `raw_dir` fixture (synthetic Parquet) | All 5 transform modules |
 | `test_features.py` | Own fixtures (synthetic DataFrames) | All 5 feature modules + `regress_rate()` |
 | `test_scoring.py` | `conftest.py` (`configs_dir`) | `scoring/engine.py` — all 4 scoring functions |
+| `test_models.py` | Own fixtures (gold-layer DFs + silver-layer DFs) + `conftest.py` (`configs_dir`) | All 10 model modules — 6 projectors, baselines, uncertainty, base utils, orchestrator |
