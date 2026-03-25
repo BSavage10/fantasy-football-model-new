@@ -72,13 +72,23 @@ Entry point: `ffmodel.cli:main`. Seven subcommands defined; `ingest`, `transform
 
 Key functions: `regress_rate()` in `efficiency.py` (empirical Bayes shrinkage), share normalization in `player_role.py` (caps team shares at 1.0).
 
+### Scoring Engine
+
+`ffmodel/scoring/engine.py` — four pure stateless functions:
+- `score_player(stats, position, config)` — offensive stats → fantasy points; all rules applied regardless of position (FR-005)
+- `score_dst(stats, pa_per_game, games, config)` — component events + points-allowed bracket lookup
+- `score_kicker(stats, config)` — XP + FG distance buckets
+- `expected_pa_bracket_value(mean_pa, std_pa, brackets)` — Monte Carlo expected bracket value for DST PA uncertainty
+
+Stats dict keys match `player_week_fact` column names for offensive players.
+
 ### Phase Status
 
-Phases 1–3 (foundation, ingest + transform, features) are complete. Phases 4–7 (scoring, models, ranking/export, backtest) are planned. See `docs/implementation-plan.md` for full spec.
+Phases 1–4 (foundation, ingest + transform, features, scoring engine) are complete. Phases 5–7 (models, ranking/export, backtest) are planned. See `docs/implementation-plan.md` for full spec.
 
 ## Testing
 
-86 tests (20 config, 30 transform, 36 features). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
+114 tests (20 config, 30 transform, 36 features, 28 scoring). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
 
 ## Key Docs
 

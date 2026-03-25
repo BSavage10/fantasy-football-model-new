@@ -10,7 +10,7 @@ How the system's components connect. Updated as the project evolves.
 nfl_data_py ──→ snapshot.py (data extraction)
 pandas ────────→ all transform & feature modules
 pyarrow ───────→ Parquet I/O throughout
-numpy ─────────→ team_week.py, team_context.py, player_role.py, efficiency.py, future models
+numpy ─────────→ team_week.py, team_context.py, player_role.py, efficiency.py, scoring/engine.py, future models
 scipy ─────────→ future models (regression, bootstrap)
 pyyaml ────────→ config.py (config loading)
 ```
@@ -34,6 +34,7 @@ CLI (cli.py)
   │               efficiency.py ─────→ data/gold/{as_of_date}/player_efficiency_features.parquet
   │               availability.py ───→ data/gold/{as_of_date}/availability_features.parquet
   │               manual_factors.py ─→ data/gold/{as_of_date}/manual_factor_features.parquet
+  ├─ score    ──→ scoring/engine.py (stateless; no file I/O)
   ├─ project  (Phase 5) ──→ outputs/{run_id}/projections/
   ├─ rank     (Phase 6) ──→ outputs/{run_id}/rankings/
   └─ backtest (Phase 7) ──→ outputs/backtest/
@@ -115,7 +116,22 @@ Steps 1–5 are independent (each reads only from silver); they could run in par
 | `availability_features` | `player_week_fact`, `player_dim` | `ModelConfig.recency_weights`, `ModelConfig.games_active` |
 | `manual_factor_features` | `manual/manual_factors.csv` | — |
 
-### Future Dependencies (Phases 4–7)
+### Scoring Layer (Phase 4 — complete)
+
+```
+config.py (ScoringConfig)
+    │
+    └──→ scoring/engine.py
+              │
+              ├─ score_player(stats, position, config) → float
+              ├─ score_dst(stats, pa_per_game, games, config) → float
+              ├─ score_kicker(stats, config) → float
+              └─ expected_pa_bracket_value(mean_pa, std_pa, brackets) → float
+```
+
+`scoring/engine.py` is a pure functions module. It has no file I/O and no dependencies on pandas or data tables — only `ScoringConfig` (from `config.py`) and `numpy`.
+
+### Future Dependencies (Phases 5–7)
 
 These are planned but not yet built:
 
@@ -125,7 +141,7 @@ Gold features ──→ Position models (Phase 5)
                     ├─ Each model reads: team_context + player_role + efficiency + availability
                     └─ All models share: base.py (weighted_mean, regress_rate, StatProjection)
 
-Projections ──→ Scoring engine (Phase 4)
+Projections ──→ scoring/engine.py (score stats → fantasy points)
             ──→ Overlay applicator (Phase 6)
             ──→ Ranking layer (Phase 6)
             ──→ QA checks (Phase 6)
@@ -149,3 +165,4 @@ Projections ──→ Scoring engine (Phase 4)
 | `test_config.py` | `conftest.py` (`configs_dir`) | `config.py` |
 | `test_transform.py` | Own `raw_dir` fixture (synthetic Parquet) | All 5 transform modules |
 | `test_features.py` | Own fixtures (synthetic DataFrames) | All 5 feature modules + `regress_rate()` |
+| `test_scoring.py` | `conftest.py` (`configs_dir`) | `scoring/engine.py` — all 4 scoring functions |

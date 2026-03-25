@@ -4,6 +4,28 @@ Records why specific implementation choices were made. Organized by phase.
 
 ---
 
+## Phase 4 — Scoring Engine
+
+### D-4.1: score_player applies all rules regardless of position
+
+**Decision:** `score_player` reads every stat key from the stats dict and applies every scoring rule, regardless of the `position` argument. Passing `position="WR"` with `rush_yd=25` will score those rush yards.
+
+**Why:** FR-005 requires cross-category stat support. Branching on position would require a mapping of "which stats apply to which positions," and would silently zero out trick-play stats for non-QB/RB positions. Since the scoring config treats all offensive positions the same way, the cleanest implementation is to apply all rules unconditionally — the `position` argument is accepted for future extensibility but has no effect on scoring logic today.
+
+### D-4.2: yards-per-point as the config unit for yardage scoring
+
+**Decision:** `OffenseScoringConfig` stores `passing_yards_per_point: 25.0` (and similarly for rushing/receiving) rather than storing the per-yard multiplier (0.04).
+
+**Why:** The "1 point per 25 yards" framing maps directly to how Yahoo and most platforms describe yardage scoring. Storing the per-yard multiplier (0.04) would be equivalent mathematically but less legible when reading the config file. The scoring engine divides `stats["pass_yd"] / config.offense.passing_yards_per_point`, which reads naturally.
+
+### D-4.3: score_dst uses direct bracket lookup; expected_pa_bracket_value is a separate utility
+
+**Decision:** `score_dst` does a direct bracket lookup on `pa_per_game` (no Monte Carlo). `expected_pa_bracket_value` is a separate exported function for callers that want to account for PA variance.
+
+**Why:** Phase 4 only needs to score known (projected) stat lines. The direct lookup is exact and fast. The Monte Carlo utility is needed in Phase 5 uncertainty calculations, where projecting a distribution over PA per game matters. Keeping them separate means `score_dst` is a simple pure function with no random state, making it easier to test and reason about.
+
+---
+
 ## Phase 3 — Feature Engineering
 
 ### D-3.1: Recency-weighted averages for team context

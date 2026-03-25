@@ -4,6 +4,19 @@ All notable changes to the ffmodel projection system, organized by implementatio
 
 ---
 
+## Phase 4 — Scoring Engine (2026-03-24)
+
+### Added
+- **Scoring engine** (`ffmodel/scoring/engine.py`): Three pure, stateless functions that translate projected season stats into fantasy points under a `ScoringConfig`:
+  - `score_player(stats, position, config)` — Offensive players (QB/RB/WR/TE). Applies all scoring rules regardless of position (FR-005 cross-category support: WR rushing yards, RB passing TDs, etc.). Stats keys match `player_week_fact` column names.
+  - `score_dst(stats, pa_per_game, games, config)` — DST unit. Scores component events (sacks, INTs, fumble recoveries, TDs, safeties, block kicks, return TDs, XP returns) plus a per-game bracket lookup on `pa_per_game` × `games`.
+  - `score_kicker(stats, config)` — Kicker. XP + five FG distance buckets (0-19, 20-29, 30-39, 40-49, 50+).
+  - `expected_pa_bracket_value(mean_pa, std_pa, brackets, n_samples)` — Monte Carlo expected value of the DST points-allowed bracket given a distribution of PA per game. Falls back to direct lookup when `std_pa == 0`.
+- **Scoring package init** (`ffmodel/scoring/__init__.py`): Re-exports all four public functions.
+- **28 scoring tests** (`tests/test_scoring.py`): QB exact total (286.22), RB half-PPR component sum (26.5), WR cross-position rushing credit (8.5), kicker full season (93.0), DST component+bracket (31.0), bracket boundary coverage, reconciliation (additivity), config-change sensitivity (INT -2→-1 shifts QB by INT_count×1, reception 0.5→1.0 shifts RB by catches×0.5, FG bucket change exact).
+
+---
+
 ## Phase 3 — Feature Engineering (2026-03-24)
 
 ### Added

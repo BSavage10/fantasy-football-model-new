@@ -63,12 +63,27 @@ Canonical column definitions for each gold table are defined as `COLUMNS` lists 
 | `availability_features.parquet` | `ffmodel/features/availability.py` | 1 row per player (target season) |
 | `manual_factor_features.parquet` | `ffmodel/features/manual_factors.py` | 1 row per entity-factor |
 
+## Scoring Engine
+
+Fantasy point scoring is implemented in `ffmodel/scoring/engine.py` as four pure, stateless functions:
+
+| Function | Inputs | Output |
+|----------|--------|--------|
+| `score_player(stats, position, config)` | Stats dict (pass_yd, pass_td, interceptions, rush_yd, rush_td, receptions, rec_yd, rec_td, fumbles_lost, return_td, two_pt_conv, off_fumble_return_td) | `float` fantasy points |
+| `score_dst(stats, pa_per_game, games, config)` | Stats dict (sacks, interceptions, fumble_recoveries, dst_td, safeties, block_kicks, return_tds, extra_point_returns) + pa/game + games played | `float` fantasy points |
+| `score_kicker(stats, config)` | Stats dict (pat_made, fg_0_19, fg_20_29, fg_30_39, fg_40_49, fg_50_plus) | `float` fantasy points |
+| `expected_pa_bracket_value(mean_pa, std_pa, brackets, n_samples)` | Mean and std of PA/game + bracket definitions | Expected `float` pts/game from bracket |
+
+Scoring config lives in `configs/scoring.yaml`. All stat-to-point conversions are config-driven (FR-004).
+
 ## Key Algorithms
 
 | Function | Module | Purpose |
 |----------|--------|---------|
 | `regress_rate()` | `ffmodel/features/efficiency.py` | Empirical Bayes shrinkage: `(observed × N + prior × k) / (N + k)` |
 | `_normalize_shares_within_team()` | `ffmodel/features/player_role.py` | Proportionally scale shares to sum ≤1.0 per team |
+| `_bracket_lookup()` | `ffmodel/scoring/engine.py` | Direct lookup of DST points-allowed bracket for a given PA total |
+| `expected_pa_bracket_value()` | `ffmodel/scoring/engine.py` | Monte Carlo expected bracket value accounting for PA variance (Jensen's inequality) |
 
 ## Manual Factors
 
@@ -81,6 +96,7 @@ Manual overlay inputs are stored in `manual/manual_factors.csv`. Required column
 | `tests/test_config.py` | Config loading, validation, frozen enforcement, hash determinism | 20 |
 | `tests/test_transform.py` | All 5 silver table transforms — uniqueness, schemas, types, normalization | 30 |
 | `tests/test_features.py` | All 5 feature modules — share sums, leakage prevention, regress_rate math, rookies, team changers, availability, manual factor validation | 36 |
+| `tests/test_scoring.py` | All 4 scoring functions — QB exact total, RB half-PPR, WR cross-position, kicker, DST component+bracket, reconciliation, config change sensitivity | 28 |
 
 ## Design Document
 
