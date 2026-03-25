@@ -4,6 +4,19 @@ All notable changes to the ffmodel projection system, organized by implementatio
 
 ---
 
+## Phase 7 — Evaluation & Documentation (2026-03-24)
+
+### Added
+- **Backtest runner** (`ffmodel/backtest.py`): Rolling-origin backtest framework. For each holdout season, builds features from prior data only, runs full projection pipeline, computes actuals from `player_week_fact`, and joins projections to actuals. Computes per-position and aggregate metrics: MAE, RMSE, Spearman rank correlation, top-N hit rate (QB top-20, RB top-20, WR top-30, TE top-10), P25/P75 calibration coverage. Runs two baselines (weighted-history, last-year) for comparison. Manual factors excluded from headline numbers. Output: `backtest_results.parquet`, `backtest_summary.csv`, `baseline_comparison.csv` in `outputs/backtest/`.
+- **Runbook** (`docs/runbook.md`): Operational guide covering data refresh, model rerun, manual factor editing, backtest evaluation, scoring config changes, release checklist, and troubleshooting.
+- **Decision log** (`docs/decision_log.md`): Key design and implementation decisions with rationale, organized by phase. Covers all decisions from Phase 1 through Phase 7.
+- **33 backtest tests** (`tests/test_backtest.py`): actuals computation (5 tests), Spearman correlation (3), top-N hit rate (5), calibration (2), season metrics (5), write results (2), summary building (2), baseline comparison (2), leakage prevention (2), CLI parsing (2), integration with silver data on disk (3).
+
+### Changed
+- `ffmodel/cli.py` — Added `_cmd_backtest` handler, wired into dispatch table. Parses `--seasons` comma-separated argument.
+
+---
+
 ## Phase 6 — Overlay, Ranking, QA & Export (2026-03-24)
 
 ### Added

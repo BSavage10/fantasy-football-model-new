@@ -4,6 +4,40 @@ Records why specific implementation choices were made. Organized by phase.
 
 ---
 
+## Phase 7 — Evaluation & Documentation
+
+### D-7.1: Rolling-origin backtest protocol
+
+**Decision:** For each holdout season, build features using only data from seasons strictly before the holdout, run the full projection pipeline, and compare to actual fantasy points from that season.
+
+**Why:** Rolling-origin evaluation mirrors real preseason usage — you only have historical data when making predictions. This prevents any form of leakage and is the gold standard for time-series model evaluation.
+
+### D-7.2: Exclude manual factors from backtest headline numbers
+
+**Decision:** Manual overlays are not applied during backtest runs. The backtest evaluates the model-only pipeline.
+
+**Why:** Manual factors (coaching changes, injury returns, qualitative assessments) cannot be reconstructed historically. Including them would either require fabricated historical factors or inflate accuracy in ways that don't generalize to future seasons.
+
+### D-7.3: Offensive-only backtest evaluation
+
+**Decision:** Backtest metrics are computed for QB, RB, WR, TE only. DST and kicker projections are excluded from headline backtest numbers.
+
+**Why:** DST and kicker projections rely heavily on league-average counting stats and team-level context rather than individual player models. The model's measurable value-add is in predicting offensive player production, where the feature engineering and position models do the heavy lifting.
+
+### D-7.4: Reuse production build_* functions in backtest
+
+**Decision:** The backtest calls the same `build_team_context_features()`, `build_player_role_features()`, etc. functions as the live pipeline, just with a different `target_season` parameter.
+
+**Why:** Using the same functions ensures the backtest tests the actual production code path, not a separate reimplementation. If there's a bug in feature engineering, the backtest will surface it. The `target_season` parameter already serves as the leakage gate (all feature functions filter `season < target_season`).
+
+### D-7.5: Use latest silver data for all holdout seasons
+
+**Decision:** The backtest reads silver-layer data once from the most recent available silver directory, then filters by season for each holdout.
+
+**Why:** This avoids requiring separate ingest/transform runs for each historical year. The silver layer contains all seasons (2020-2025 in the default config), so filtering by `season < holdout` gives the correct training window. The alternative — running ingest/transform per holdout season — would be much slower and produce identical results.
+
+---
+
 ## Phase 6 — Overlay, Ranking, QA & Export
 
 ### D-6.1: Overlay applied to P50 points, not to raw per-game stats

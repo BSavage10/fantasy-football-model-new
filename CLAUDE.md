@@ -25,6 +25,7 @@ uv run python -m ffmodel features --as-of-date 2025-09-01
 uv run python -m ffmodel project --as-of-date 2025-09-01
 uv run python -m ffmodel rank --as-of-date 2025-09-01
 uv run python -m ffmodel run --as-of-date 2025-09-01   # full pipeline end-to-end
+uv run python -m ffmodel backtest --seasons 2023,2024,2025  # rolling-origin evaluation
 ```
 
 ## Architecture
@@ -61,7 +62,7 @@ Each module defines its schema as a `COLUMNS` list at the top of the file.
 
 ### CLI
 
-Entry point: `ffmodel.cli:main`. Seven subcommands defined; `ingest`, `transform`, `features`, `project`, `rank`, and `run` are wired. `backtest` prints "not yet implemented". Dispatch table in `cli.py`.
+Entry point: `ffmodel.cli:main`. All seven subcommands wired: `ingest`, `transform`, `features`, `project`, `rank`, `run`, `backtest`. Dispatch table in `cli.py`.
 
 ### Gold Tables
 
@@ -122,13 +123,23 @@ Stats dict keys match `player_week_fact` column names for offensive players.
 
 `ffmodel/pipeline.py` — `run_pipeline()` orchestrates full end-to-end (ingest → transform → features → project → overlay → rank → QA → export) with idempotent caching. `generate_run_id()` format: `{as_of_date}_{YYYYMMDD_HHMMSS}_{config_hash[:8]}`.
 
+### Backtest Framework
+
+`ffmodel/backtest.py` — rolling-origin backtest runner:
+- `run_backtest(config, holdout_seasons, data_dir, output_dir)` — for each holdout season, builds features from prior data only, runs full projection pipeline, computes actuals, joins projections to actuals
+- `compute_actuals(player_week_fact, holdout_season, scoring_config)` — actual fantasy points from player_week_fact
+- `compute_season_metrics()` — MAE, RMSE, Spearman rank correlation, top-N hit rate, P25/P75 calibration
+- Runs two baselines (weighted-history, last-year) for comparison
+- Manual factors excluded from headline numbers (not historically reconstructable)
+- Output: `outputs/backtest/backtest_results.parquet`, `backtest_summary.csv`, `baseline_comparison.csv`
+
 ### Phase Status
 
-Phases 1–6 (foundation, ingest + transform, features, scoring engine, position models, overlay/ranking/QA/export) are complete. Phase 7 (backtest) is planned. See `docs/implementation-plan.md` for full spec.
+All 7 phases complete: foundation, ingest + transform, features, scoring engine, position models, overlay/ranking/QA/export, evaluation & documentation. See `docs/implementation-plan.md` for full spec.
 
 ## Testing
 
-215 tests (20 config, 30 transform, 36 features, 28 scoring, 33 models, 20 overlay, 12 ranking, 22 QA, 14 pipeline/export). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
+248 tests (20 config, 30 transform, 36 features, 28 scoring, 33 models, 20 overlay, 12 ranking, 22 QA, 14 pipeline/export, 33 backtest). All use synthetic Parquet fixtures in temp directories — no network calls, fully deterministic. Tests live in `tests/`, fixtures built in `conftest.py`.
 
 ## Key Docs
 
@@ -136,8 +147,10 @@ Phases 1–6 (foundation, ingest + transform, features, scoring engine, position
 - `docs/requirements.md` — original spec (FR-001–FR-025, QC-001–QC-012, SC-001–SC-006)
 - `docs/sources_of_truth.md` — where authoritative info lives
 - `docs/decisions.md` — why specific implementation choices were made
+- `docs/decision_log.md` — expanded decision log with rationale per phase
 - `docs/changelog.md` — what was built, organized by phase
 - `docs/dependencies.md` — how components connect
+- `docs/runbook.md` — operational guide: data refresh, rerun, manual factors, release checklist
 
 ## Post-Phase Checklist
 

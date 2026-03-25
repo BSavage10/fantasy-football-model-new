@@ -11,7 +11,7 @@ nfl_data_py ──→ snapshot.py (data extraction)
 pandas ────────→ all transform & feature modules
 pyarrow ───────→ Parquet I/O throughout
 numpy ─────────→ team_week.py, team_context.py, player_role.py, efficiency.py, scoring/engine.py, models/uncertainty.py
-scipy ─────────→ future models (regression, bootstrap)
+scipy ─────────→ backtest.py (Spearman rank correlation)
 pyyaml ────────→ config.py (config loading)
 ```
 
@@ -50,7 +50,16 @@ CLI (cli.py)
   ├─ run     ──→ pipeline.py (orchestrates all above steps end-to-end)
   │              outputs/{run_id}/rankings/ + projections/
   │
-  └─ backtest (Phase 7) ──→ outputs/backtest/
+  └─ backtest ──→ backtest.py ──→ outputs/backtest/
+                    │               ├─ backtest_results.parquet
+                    │               ├─ backtest_summary.csv
+                    │               └─ baseline_comparison.csv
+                    │
+                    ├─ features/*.build_*()  (reused for each holdout season)
+                    ├─ models/run_projections()
+                    ├─ models/baselines.py
+                    ├─ scoring/engine.py
+                    └─ silver data (player_week_fact, team_week_fact, player_dim)
 ```
 
 ## Module Dependencies
@@ -182,17 +191,28 @@ Projections + Uncertainty ──→ overlay/applicator.py
 
 `pipeline.py` orchestrates the full end-to-end flow (ingest → transform → features → project → overlay → rank → QA → export) with idempotent caching.
 
-### Future Dependencies (Phase 7)
+### Backtest Layer (Phase 7 — complete)
 
 ```
-Pipeline ──→ backtest.py (rolling-origin historical evaluation)
+Silver data + Config ──→ backtest.py
+                            │
+                            ├─ features/*.build_*() (per holdout season, data filtered to seasons < holdout)
+                            ├─ models/run_projections() + compute_all_uncertainty()
+                            ├─ scoring/engine.score_player() (compute actuals)
+                            ├─ models/baselines.py (weighted_history, last_year)
+                            └─ scipy.stats.spearmanr (rank correlation)
+                            │
+                            └──→ outputs/backtest/
+                                   ├─ backtest_results.parquet
+                                   ├─ backtest_summary.csv
+                                   └─ baseline_comparison.csv
 ```
 
 ## Config → Module Relationships
 
 | Config | Consumed By |
 |--------|------------|
-| `ScoringConfig` | `scoring/engine.py`, `models/uncertainty.py`, `models/baselines.py`, `models/dst.py`, `qa/checks.py` |
+| `ScoringConfig` | `scoring/engine.py`, `models/uncertainty.py`, `models/baselines.py`, `models/dst.py`, `qa/checks.py`, `backtest.py` |
 | `LeagueConfig` | (future: roster-count-based replacement levels) |
 | `ModelConfig` | `features/*.py`, `models/dst.py`, `models/kicker.py`, `overlay/applicator.py` (OverlayConfig) |
 | `RankingConfig` | `ranking/ranker.py` |
@@ -211,3 +231,4 @@ Pipeline ──→ backtest.py (rolling-origin historical evaluation)
 | `test_ranking.py` | Own fixtures (OverlayResults + DFs + RankingConfig) | `ranking/ranker.py` — ranking order, position ranks, VOR, upside objective |
 | `test_qa.py` | Own fixtures (synthetic DFs + ScoringConfig) | `qa/checks.py` — all 12 QC checks pass/fail scenarios |
 | `test_pipeline.py` | Own fixtures (RankedPlayer list) + `tmp_path` | `pipeline.py`, `export/writer.py`, `cli.py` — run_id format, file creation, schema, metadata |
+| `test_backtest.py` | Own fixtures (synthetic player/team DFs, pre-built results) + `conftest.py` (`configs_dir`, `project_root`) | `backtest.py` — actuals computation, metrics, summary, comparison, leakage prevention, integration |

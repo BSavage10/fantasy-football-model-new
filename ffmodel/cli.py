@@ -255,6 +255,18 @@ def _cmd_transform(args: argparse.Namespace) -> None:
     print(f"[ffmodel] transform complete → {silver_dir}")
 
 
+def _cmd_backtest(args: argparse.Namespace) -> None:
+    from ffmodel.backtest import run_backtest
+
+    config = load_project_config(args.config_dir)
+    holdout_seasons = [int(s.strip()) for s in args.seasons.split(",")]
+    out_dir = run_backtest(
+        config, holdout_seasons,
+        data_dir=args.data_dir,
+    )
+    print(f"[ffmodel] backtest complete → {out_dir}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="ffmodel",
@@ -335,6 +347,7 @@ def main(argv: list[str] | None = None) -> None:
         "project": _cmd_project,
         "rank": _cmd_rank,
         "run": _cmd_run,
+        "backtest": _cmd_backtest,
     }
 
     handler = dispatch.get(args.command)

@@ -115,6 +115,9 @@ Per-game stat keys by position:
 | `combine_multipliers()` | `ffmodel/overlay/applicator.py` | Multiplicatively aggregate factors with ±max_total_effect cap |
 | `compute_rankings()` | `ffmodel/ranking/ranker.py` | Sort, assign position/overall rank, compute VOR |
 | `run_all_checks()` | `ffmodel/qa/checks.py` | Execute all 12 QA checks (QC-001 through QC-012) |
+| `run_backtest()` | `ffmodel/backtest.py` | Rolling-origin backtest with MAE/RMSE/Spearman/top-N/calibration |
+| `compute_actuals()` | `ffmodel/backtest.py` | Compute actual fantasy points from player_week_fact for a holdout season |
+| `compute_season_metrics()` | `ffmodel/backtest.py` | Aggregate metrics (MAE, RMSE, Spearman, top-N, calibration) per position per season |
 
 ## Overlay, Ranking & Export
 
@@ -125,6 +128,7 @@ Per-game stat keys by position:
 | QA checks | `ffmodel/qa/checks.py` | `run_all_checks()` — 12 checks (QC-001 through QC-012) |
 | Export writer | `ffmodel/export/writer.py` | `write_outputs()` — CSV + Parquet + schema.json + run metadata |
 | Pipeline orchestrator | `ffmodel/pipeline.py` | `run_pipeline()` — end-to-end with idempotent caching |
+| Backtest runner | `ffmodel/backtest.py` | `run_backtest()` — rolling-origin evaluation with baseline comparison |
 
 Output schema is defined in `ffmodel/export/writer.py:OUTPUT_SCHEMA` and written to `schema.json` in each run.
 
@@ -147,6 +151,7 @@ Manual overlay inputs are stored in `manual/manual_factors.csv`. Required column
 | `tests/test_ranking.py` | Ranking layer — ranking order, position ranks, VOR, upside objective, rookie/team changer flags, replacement levels | 12 |
 | `tests/test_qa.py` | QA checks — all 12 QC checks with pass/fail scenarios | 22 |
 | `tests/test_pipeline.py` | Pipeline & export — run_id format, file creation, schema.json, run metadata, CLI parsing | 14 |
+| `tests/test_backtest.py` | Backtest runner — actuals computation, Spearman, top-N hit rate, calibration, metrics, write results, summary, baseline comparison, leakage prevention, CLI, integration | 33 |
 
 ## Design Document
 
