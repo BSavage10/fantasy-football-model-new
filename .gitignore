@@ -14,3 +14,5 @@ build/
 .pytest_cache/
 .DS_Store
 uv.lock
+
+.claude/notes/activity.log

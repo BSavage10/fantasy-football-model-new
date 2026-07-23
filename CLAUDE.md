@@ -152,6 +152,10 @@ All 7 phases complete: foundation, ingest + transform, features, scoring engine,
 - `docs/dependencies.md` — how components connect
 - `docs/runbook.md` — operational guide: data refresh, rerun, manual factors, release checklist
 
+## Agent Workflow Toolkit
+
+`.claude/` carries a project-agnostic workflow toolkit (overview in `.claude/README.md`): use `/define-done` before any nontrivial task, `/find-unknowns` when planning or brainstorming, `/make-rubric` for subjective deliverables, and `/handoff` to catch up on recent work. Hooks log file changes automatically and require a dated entry in `.claude/notes/journal.md` before a session that changed files can end — the journal's decisions and gotchas are the part git history can't recover.
+
 ## Post-Phase Checklist
 
 After completing any implementation phase (passing all exit criteria), update these files before considering the phase done:
